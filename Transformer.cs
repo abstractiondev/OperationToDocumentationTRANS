@@ -1,7 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
+using System.Xml.Linq;
+using System.Xml.Serialization;
 using Documentation_v1_0;
 using Operation_v1_0;
 
@@ -9,10 +12,43 @@ namespace OperationToDocumentationTRANS
 {
     public class Transformer
     {
+        T LoadXml<T>(string xmlFileName)
+        {
+            using (FileStream fStream = File.OpenRead(xmlFileName))
+            {
+                XmlSerializer serializer = new XmlSerializer(typeof(T));
+                T result = (T)serializer.Deserialize(fStream);
+                fStream.Close();
+                return result;
+            }
+        }
+
+
+
 	    public Tuple<string, string>[] GetGeneratorContent(params string[] xmlFileNames)
 	    {
-	        return new Tuple<string, string>[] { Tuple.Create("Peeja", "Peeja!")};
+            List<Tuple<string, string>> result = new List<Tuple<string, string>>();
+            foreach(string xmlFileName in xmlFileNames)
+            {
+                OperationAbstractionType operationAbs = LoadXml<OperationAbstractionType>(xmlFileName);
+                DocumentationAbstractionType docAbs = TransformAbstraction(operationAbs);
+                string xmlContent = WriteToXmlString(docAbs);
+                FileInfo fInfo = new FileInfo(xmlFileName);
+                string contentFileName = "DocFrom" + fInfo.Name;
+                result.Add(Tuple.Create(contentFileName, xmlContent));
+            }
+	        return result.ToArray();
 	    }
+
+        private string WriteToXmlString(DocumentationAbstractionType docAbs)
+        {
+            XmlSerializer serializer = new XmlSerializer(typeof(DocumentationAbstractionType));
+            MemoryStream memoryStream = new MemoryStream();
+            serializer.Serialize(memoryStream, docAbs);
+            byte[] data = memoryStream.ToArray();
+            string result = System.Text.Encoding.UTF8.GetString(data);
+            return result;
+        }
 
         public static DocumentationAbstractionType TransformAbstraction(OperationAbstractionType operationAbstraction)
         {
@@ -34,6 +70,8 @@ namespace OperationToDocumentationTRANS
         {
             DocumentType document = new DocumentType
                                         {
+                                            title = "Operations",
+                                            name = "Operations",
                                             Content = operationAbstraction.Operations.Operation.Select(
                                                 operation => GetOperationContent(operation)).ToArray()
                                         };
