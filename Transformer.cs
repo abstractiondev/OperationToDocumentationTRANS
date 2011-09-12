@@ -86,12 +86,49 @@ namespace OperationToDocumentationTRANS
                                         level = 1,
                                     };
             List<HeaderType> subHeaders = new List<HeaderType>();
-            subHeaders.AddRange(
-                operation.Parameters.Parameter.Select(GetParameterContent));
+            subHeaders.Add(GetParametersHeaderedTable(operation.Parameters.Parameter));
+            //subHeaders.AddRange(
+            //    operation.Parameters.Parameter.Select(GetParameterContent));
             subHeaders.AddRange(
                 operation.Parameters.Items.Select(GetValidationModificationContent));
             subHeaders.ForEach(subHeader => header.AddSubHeader(subHeader));
             return header;
+        }
+
+        private static HeaderType GetParametersHeaderedTable(VariableType[] parameters)
+        {
+            HeaderType paramHeader = new HeaderType();
+            paramHeader.text = "Parameters";
+            paramHeader.Paragraph = new ParagraphType[]
+                                        {
+                                            new ParagraphType { Items = new object[] { GetParameterTable(parameters) } }
+                                        };
+            return paramHeader;
+        }
+
+        private static TableType GetParameterTable(VariableType[] parameters)
+        {
+            TableType table = new TableType
+                                  {
+                                      Columns = new[]
+                                                    {
+                                                        new ColumnType {name = "Parameter"},
+                                                        new ColumnType {name = "DataType"},
+                                                        new ColumnType {name = "Description"}
+                                                    }
+                                  };
+            List<TextType[]> rows = new List<TextType[]>();
+            rows.AddRange(parameters.Select(par => new TextType[]
+                                                       {
+                                                           new TextType {TextContent = par.name, 
+                                                               styleRef = GetStyleName(par.state.ToString())},
+                                                           new TextType {TextContent = par.dataType,
+                                                               styleRef = GetStyleName(par.state.ToString())},
+                                                           new TextType {TextContent = par.designDesc,
+                                                               styleRef = GetStyleName(par.state.ToString())}
+                                                       }));
+            table.Rows = rows.ToArray();
+            return table;
         }
 
         private static HeaderType GetValidationModificationContent(object validationModification)
@@ -138,7 +175,7 @@ namespace OperationToDocumentationTRANS
 
         private static string GetStyleName(string stateString)
         {
-            return null;
+            return stateString;
         }
     }
 }
