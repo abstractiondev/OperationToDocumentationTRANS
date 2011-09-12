@@ -7,8 +7,13 @@ using Operation_v1_0;
 
 namespace OperationToDocumentationTRANS
 {
-    public class Transform
+    public class Transformer
     {
+	    public Tuple<string, string>[] GetGeneratorContent(params string[] xmlFileNames)
+	    {
+	        return new Tuple<string, string>[] { Tuple.Create("Peeja", "Peeja!")};
+	    }
+
         public static DocumentationAbstractionType TransformAbstraction(OperationAbstractionType operationAbstraction)
         {
             DocumentType document = GetDocument(operationAbstraction);
