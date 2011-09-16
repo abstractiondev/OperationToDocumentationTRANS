@@ -101,7 +101,7 @@ namespace OperationToDocumentationTRANS
             paramHeader.text = "Parameters";
             paramHeader.Paragraph = new ParagraphType[]
                                         {
-                                            new ParagraphType { Items = new object[] { GetParameterTable(parameters) } }
+                                            new ParagraphType { Item = GetParameterTable(parameters)  }
                                         };
             return paramHeader;
         }
