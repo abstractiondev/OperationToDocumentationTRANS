@@ -80,39 +80,71 @@ namespace OperationToDocumentationTRANS
 
         private static HeaderType GetOperationContent(OperationType operation)
         {
+            string headerText = operation.name + " ("
+                                +
+                                String.Join(", ", operation.Parameters.Parameter.Select(item => item.name).ToArray())
+                                + ")";
             HeaderType header = new HeaderType
                                     {
-                                        text = operation.name,
+                                        text = headerText,
                                         level = 1,
                                     };
             List<HeaderType> subHeaders = new List<HeaderType>();
-            subHeaders.Add(GetParametersHeaderedTable(operation.Parameters.Parameter));
+            subHeaders.Add(GetVariablesHeaderedTable("Parameters", "Parameter", operation.Parameters.Parameter));
             //subHeaders.AddRange(
             //    operation.Parameters.Parameter.Select(GetParameterContent));
             subHeaders.AddRange(
                 operation.Parameters.Items.Select(GetValidationModificationContent));
+            subHeaders.AddRange(
+                operation.Execution.SequentialExecution.Select(GetExecutionContent));
+            if(operation.OperationReturnValues != null)
+                subHeaders.Add(GetReturnValuesContent(operation.OperationReturnValues));
             subHeaders.ForEach(subHeader => header.AddSubHeader(subHeader));
             return header;
         }
 
-        private static HeaderType GetParametersHeaderedTable(VariableType[] parameters)
+        private static HeaderType GetReturnValuesContent(OperationReturnValuesType operationReturnValues)
+        {
+            string headerText = "Return Values ("
+                                +
+                                String.Join(", ", operationReturnValues.ReturnValue.Select(item => item.name).ToArray())
+                                + ")";
+            HeaderType returnValueHeader = new HeaderType
+                                               {
+                                                   text = headerText
+                                               };
+            string[] paramNames =
+                (operationReturnValues.Parameter ?? new TargetType[0]).Select(target => target.name).ToArray();
+            string[] targetNames = 
+                (operationReturnValues.Target ?? new TargetType[0]).Select(target => target.name).ToArray();
+            if (paramNames.Length > 0 || targetNames.Length > 0)
+            {
+                string parametersAndTargets = "Parameters and targets: " +
+                                              String.Join(", ", paramNames.Union(targetNames).ToArray());
+                returnValueHeader.AddHeaderTextContent(null, parametersAndTargets);
+            }
+            returnValueHeader.AddHeaderTableContent(GetVariableTable("Return Value", operationReturnValues.ReturnValue));
+            return returnValueHeader;
+        }
+
+        private static HeaderType GetVariablesHeaderedTable(string headerText, string itemName, VariableType[] variables)
         {
             HeaderType paramHeader = new HeaderType();
-            paramHeader.text = "Parameters";
+            paramHeader.text = headerText;
             paramHeader.Paragraph = new ParagraphType[]
                                         {
-                                            new ParagraphType { Item = GetParameterTable(parameters)  }
+                                            new ParagraphType { Item = GetVariableTable(itemName, variables)  }
                                         };
             return paramHeader;
         }
 
-        private static TableType GetParameterTable(VariableType[] parameters)
+        private static TableType GetVariableTable(string itemName, VariableType[] parameters)
         {
             TableType table = new TableType
                                   {
                                       Columns = new[]
                                                     {
-                                                        new ColumnType {name = "Parameter"},
+                                                        new ColumnType {name = itemName},
                                                         new ColumnType {name = "DataType"},
                                                         new ColumnType {name = "Description"}
                                                     }
@@ -131,6 +163,20 @@ namespace OperationToDocumentationTRANS
             return table;
         }
 
+        private static HeaderType GetExecutionContent(object execItem)
+        {
+            dynamic dynObj = execItem;
+            string headerText = "Execution: " + dynObj.name;
+            HeaderType execHeader = new HeaderType
+                                        {
+                                            text = headerText,
+                                        };
+            string styleName = GetStyleName(dynObj.state.ToString());
+            string content = dynObj.designDesc;
+            execHeader.AddHeaderTextContent(styleName, content);
+            return execHeader;
+        }
+
         private static HeaderType GetValidationModificationContent(object validationModification)
         {
             ValidationType validation = validationModification as ValidationType;
@@ -146,7 +192,7 @@ namespace OperationToDocumentationTRANS
         private static HeaderType GetModificationContent(ModificationType modification)
         {
             HeaderType header = new HeaderType {text = "Modification: " + modification.name};
-            string styleName = modification.state.ToString();
+            string styleName = GetStyleName(modification.state.ToString());
             header.SetHeaderTextContent(styleName, modification.designDesc);
             foreach (var target in modification.Target ?? new TargetType[0])
                 header.AddHeaderTextContent(styleName, "Target: " + target.name);
@@ -156,7 +202,7 @@ namespace OperationToDocumentationTRANS
         private static HeaderType GetValidationContent(ValidationType validation)
         {
             HeaderType header = new HeaderType {text = "Validation: " + validation.name};
-            string styleName = validation.state.ToString();
+            string styleName = GetStyleName(validation.state.ToString());
             header.SetHeaderTextContent(styleName, validation.designDesc);
             foreach (var target in validation.Target ?? new TargetType[0])
                 header.AddHeaderTextContent(styleName, "Target: " + target.name);
@@ -175,7 +221,17 @@ namespace OperationToDocumentationTRANS
 
         private static string GetStyleName(string stateString)
         {
-            return stateString;
+            switch (stateString)
+            {
+                case "implemented":
+                    return null;
+                case "designApproved":
+                    return "color:blue;font-weight:bold;font-style:italic";
+                case "underDesign":
+                    return "color:red;font-weight:bold;text-decoration:underline";
+                default:
+                    throw new NotSupportedException("State string value: " + stateString);
+            }
         }
     }
 }
