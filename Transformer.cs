@@ -80,49 +80,53 @@ namespace OperationToDocumentationTRANS
 
         private static HeaderType GetOperationContent(OperationType operation)
         {
-            string headerText = operation.name + " ("
-                                +
-                                String.Join(", ", operation.Parameters.Parameter.Select(item => item.name).ToArray())
-                                + ")";
+            string parameterExt = "";
+            if(operation.Parameters != null)
+                parameterExt = " (" + String.Join(", ",operation.Parameters.Parameter.Select(item => item.name).ToArray()) + ")";
+            string headerText = operation.name + parameterExt;
             HeaderType header = new HeaderType
                                     {
                                         text = headerText,
                                         level = 1,
                                     };
             List<HeaderType> subHeaders = new List<HeaderType>();
-            subHeaders.Add(GetVariablesHeaderedTable("Parameters", "Parameter", operation.Parameters.Parameter));
+            if (operation.Parameters != null)
+            {
+                subHeaders.Add(GetVariablesHeaderedTable("Parameters", "Parameter", operation.Parameters.Parameter));
+                subHeaders.AddRange(operation.Parameters.Items.Select(GetValidationModificationContent));
+            }
             //subHeaders.AddRange(
             //    operation.Parameters.Parameter.Select(GetParameterContent));
             subHeaders.AddRange(
-                operation.Parameters.Items.Select(GetValidationModificationContent));
-            subHeaders.AddRange(
                 operation.Execution.SequentialExecution.Select(GetExecutionContent));
             if(operation.OperationReturnValues != null)
-                subHeaders.Add(GetReturnValuesContent(operation.OperationReturnValues));
+                subHeaders.Add(GetReturnValuesContent(operation.name, operation.OperationReturnValues));
             subHeaders.ForEach(subHeader => header.AddSubHeader(subHeader));
             return header;
         }
 
-        private static HeaderType GetReturnValuesContent(OperationReturnValuesType operationReturnValues)
+        private static HeaderType GetReturnValuesContent(string operationName, OperationReturnValuesType operationReturnValues)
         {
-            string headerText = "Return Values ("
-                                +
-                                String.Join(", ", operationReturnValues.ReturnValue.Select(item => item.name).ToArray())
-                                + ")";
+            string returnValueName = operationName + "ReturnValue";
+            string targetAndParamExt = "";
+            string[] paramNames =
+                (operationReturnValues.Parameter ?? new TargetType[0]).Select(target => target.name).ToArray();
+            string[] targetNames =
+                (operationReturnValues.Target ?? new TargetType[0]).Select(target => target.name).ToArray();
+            targetAndParamExt = getParameterExtensionString(targetNames.Union(paramNames));
+
+
+            string headerText = "Return Value : " + returnValueName + targetAndParamExt;
             HeaderType returnValueHeader = new HeaderType
                                                {
                                                    text = headerText
                                                };
-            string[] paramNames =
-                (operationReturnValues.Parameter ?? new TargetType[0]).Select(target => target.name).ToArray();
-            string[] targetNames = 
-                (operationReturnValues.Target ?? new TargetType[0]).Select(target => target.name).ToArray();
-            if (paramNames.Length > 0 || targetNames.Length > 0)
-            {
-                string parametersAndTargets = "Parameters and targets: " +
-                                              String.Join(", ", paramNames.Union(targetNames).ToArray());
-                returnValueHeader.AddHeaderTextContent(null, parametersAndTargets);
-            }
+            //if (paramNames.Length > 0 || targetNames.Length > 0)
+            //{
+            //    string parametersAndTargets = "Parameters and targets: " +
+            //                                  String.Join(", ", paramNames.Union(targetNames).ToArray());
+            //    returnValueHeader.AddHeaderTextContent(null, parametersAndTargets);
+            //}
             returnValueHeader.AddHeaderTableContent(GetVariableTable("Return Value", operationReturnValues.ReturnValue));
             return returnValueHeader;
         }
@@ -166,7 +170,11 @@ namespace OperationToDocumentationTRANS
         private static HeaderType GetExecutionContent(object execItem)
         {
             dynamic dynObj = execItem;
-            string headerText = "Execution: " + dynObj.name;
+            TargetType[] parameters = dynObj.Parameter ?? new TargetType[0];
+            TargetType[] targets = dynObj.Target ?? new TargetType[0];
+            string targetExt = getParameterExtensionString(targets.Union(parameters).Select(target => target.name));
+
+            string headerText = "Execution: " + dynObj.name + targetExt;
             HeaderType execHeader = new HeaderType
                                         {
                                             text = headerText,
@@ -174,6 +182,13 @@ namespace OperationToDocumentationTRANS
             string styleName = GetStyleName(dynObj.state.ToString());
             string content = dynObj.designDesc;
             execHeader.AddHeaderTextContent(styleName, content);
+
+            if(execItem is MethodExecuteType || execItem is OperationExecuteType)
+            {
+                VariableType[] returnValues = dynObj.ReturnValue;
+                if (returnValues != null)
+                    execHeader.AddHeaderTableContent(GetVariableTable("Output value field", returnValues));
+            }
             return execHeader;
         }
 
@@ -189,33 +204,32 @@ namespace OperationToDocumentationTRANS
                 throw new NotSupportedException("ValidationModification type: " + validationModification.GetType().Name);
         }
 
+        static string getParameterExtensionString(IEnumerable<string> parameters)
+        {
+            if (parameters == null || parameters.Count() == 0)
+                return "";
+            return " ( " + String.Join(", ", parameters) + " )";
+        }
+
         private static HeaderType GetModificationContent(ModificationType modification)
         {
-            HeaderType header = new HeaderType {text = "Modification: " + modification.name};
+            string targetExt = "";
+            if (modification.Target != null)
+                targetExt = getParameterExtensionString(modification.Target.Select(target => target.name));
+            HeaderType header = new HeaderType {text = "Modification: " + modification.name + targetExt };
             string styleName = GetStyleName(modification.state.ToString());
             header.SetHeaderTextContent(styleName, modification.designDesc);
-            foreach (var target in modification.Target ?? new TargetType[0])
-                header.AddHeaderTextContent(styleName, "Target: " + target.name);
             return header;
         }
 
         private static HeaderType GetValidationContent(ValidationType validation)
         {
-            HeaderType header = new HeaderType {text = "Validation: " + validation.name};
+            string targetExt = "";
+            if (validation.Target != null)
+                targetExt = getParameterExtensionString(validation.Target.Select(target => target.name));
+            HeaderType header = new HeaderType { text = "Validation: " + validation.name + targetExt };
             string styleName = GetStyleName(validation.state.ToString());
             header.SetHeaderTextContent(styleName, validation.designDesc);
-            foreach (var target in validation.Target ?? new TargetType[0])
-                header.AddHeaderTextContent(styleName, "Target: " + target.name);
-            return header;
-        }
-
-        private static HeaderType GetParameterContent(VariableType parameter)
-        {
-            HeaderType header = new HeaderType
-                                    {
-                                        text = parameter.name + " (" + parameter.dataType + ")",
-                                    };
-            header.SetHeaderTextContent(parameter.state.ToString(), parameter.designDesc);
             return header;
         }
 
