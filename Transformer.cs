@@ -202,20 +202,13 @@ namespace OperationToDocumentationTRANS
                 (operationReturnValues.Parameter ?? new TargetType[0]).Select(target => target.name).ToArray();
             string[] targetNames =
                 (operationReturnValues.Target ?? new TargetType[0]).Select(target => target.name).ToArray();
-            targetAndParamExt = getParameterExtensionString(targetNames.Union(paramNames));
-
+            targetAndParamExt = getParameterExtensionString(paramNames.Union(targetNames));
 
             string headerText = "Return Value : " + returnValueName + targetAndParamExt;
             HeaderType returnValueHeader = new HeaderType
                                                {
                                                    text = headerText
                                                };
-            //if (paramNames.Length > 0 || targetNames.Length > 0)
-            //{
-            //    string parametersAndTargets = "Parameters and targets: " +
-            //                                  String.Join(", ", paramNames.Union(targetNames).ToArray());
-            //    returnValueHeader.AddHeaderTextContent(null, parametersAndTargets);
-            //}
             returnValueHeader.AddHeaderTableContent(GetVariableTable("Return Value", operationReturnValues.ReturnValue));
             return returnValueHeader;
         }
