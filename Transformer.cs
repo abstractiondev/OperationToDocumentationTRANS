@@ -90,6 +90,7 @@ namespace OperationToDocumentationTRANS
                                         level = 1,
                                     };
             List<HeaderType> subHeaders = new List<HeaderType>();
+            subHeaders.Add(GetOperationSpecifications(operation.OperationSpec));
             if (operation.Parameters != null)
             {
                 subHeaders.Add(GetVariablesHeaderedTable("Parameters", "Parameter", operation.Parameters.Parameter));
@@ -103,6 +104,94 @@ namespace OperationToDocumentationTRANS
                 subHeaders.Add(GetReturnValuesContent(operation.name, operation.OperationReturnValues));
             subHeaders.ForEach(subHeader => header.AddSubHeader(subHeader));
             return header;
+        }
+
+        private static HeaderType GetOperationSpecifications(OperationSpecType operationSpec)
+        {
+            HeaderType header = new HeaderType
+                                    {
+                                        text = "Specifications",
+                                        level = 2
+                                    };
+            header.AddHeaderTextContent(null, operationSpec.Description);
+            if(operationSpec.Requirements != null)
+                header.AddSubHeaderTableContent("Requirements", GetRequirementsTable(operationSpec.Requirements));
+            if(operationSpec.UseCases != null)
+                header.AddSubHeaderTableContent("Use Cases", GetUseCasesTable(operationSpec.UseCases));
+            return header;
+        }
+
+        private static TableType GetUseCasesTable(UseCaseType[] useCases)
+        {
+            TableType table = new TableType
+            {
+                Columns = new[]
+                                                    {
+                                                        new ColumnType {name = "Use Case Name"},
+                                                        new ColumnType {name = "Location"}
+                                                    }
+            };
+            List<TextType[]> rows = new List<TextType[]>();
+            rows.AddRange(useCases.Select(uc => new TextType[]
+                                                       {
+                                                           new TextType {TextContent = uc.name },
+                                                           new TextType {TextContent = uc.locationUrl },
+                                                       }));
+            table.Rows = rows.ToArray();
+            return table;
+        }
+
+        private static TableType GetRequirementsTable(RequirementType[] requirements)
+        {
+            TableType table = new TableType
+            {
+                Columns = new[]
+                                                    {
+                                                        new ColumnType {name = "Requirement"},
+                                                        new ColumnType {name = "Category"},
+                                                        new ColumnType {name = "Description/Data"},
+                                                    }
+            };
+            List<TextType[]> rows = new List<TextType[]>();
+            rows.AddRange(requirements.Select(req => new TextType[]
+                                                       {
+                                                           new TextType {TextContent = req.name },
+                                                           new TextType {TextContent = req.category.ToString() },
+                                                           new TextType { TextContent = GetRequirementDescriptionData(req.Item) }
+                                                       }));
+            table.Rows = rows.ToArray();
+            return table;
+        }
+
+        private static string GetRequirementDescriptionData(object item)
+        {
+            if (item == null)
+                return null;
+            string textReq = item as string;
+            RequirementTypePerformance performanceReq = item as RequirementTypePerformance;
+            if (textReq != null)
+                return textReq;
+            else if(performanceReq != null)
+                return GetPerformanceRequirementDescriptionData(performanceReq);
+            else
+                throw new NotSupportedException("Requirement data type: " + item.GetType().Name);
+
+        }
+
+        private static string GetPerformanceRequirementDescriptionData(RequirementTypePerformance performanceReq)
+        {
+            List<string> allReqs = new List<string>();
+            if(performanceReq.maxCPUTimeMsSpecified)
+                allReqs.Add(string.Format("Max CPU Time: {0} ms", performanceReq.maxCPUTimeMs));
+            if (performanceReq.maxFileIOBytesSpecified)
+                allReqs.Add(string.Format("Max File I/O Bytes: {0}", performanceReq.maxFileIOBytes));
+            if (performanceReq.maxFileIOCountSpecified)
+                allReqs.Add(string.Format("Max File I/O Count: {0}", performanceReq.maxFileIOCount));
+            if (performanceReq.maxMemoryBytesSpecified)
+                allReqs.Add(string.Format("Max Memory Bytes: {0}", performanceReq.maxMemoryBytes));
+            if (performanceReq.maxTotalTimeMsSpecified)
+                allReqs.Add(string.Format("Max Total Time {0} ms", performanceReq.maxTotalTimeMs));
+            return String.Join(", ", allReqs.ToArray());
         }
 
         private static HeaderType GetReturnValuesContent(string operationName, OperationReturnValuesType operationReturnValues)
