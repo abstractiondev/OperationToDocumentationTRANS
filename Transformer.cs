@@ -72,8 +72,8 @@ namespace OperationToDocumentationTRANS
                                         {
                                             title = "Operations",
                                             name = "Operations",
-                                            Content = operationAbstraction.Operations.Operation.Select(
-                                                operation => GetOperationContent(operation)).ToArray()
+                                            Content = operationAbstraction.Operations.Operation.OrderBy(oper => oper.name).Select(
+                                                GetOperationContent).ToArray()
                                         };
             return document;
         }
@@ -83,7 +83,8 @@ namespace OperationToDocumentationTRANS
             string parameterExt = "";
             if(operation.Parameters != null)
                 parameterExt = " (" + String.Join(", ",operation.Parameters.Parameter.Select(item => item.name).ToArray()) + ")";
-            string headerText = operation.name + parameterExt;
+            string rootPrefix = operation.isRootOperation ? "(R) " : "";
+            string headerText = rootPrefix + operation.name + parameterExt;
             HeaderType header = new HeaderType
                                     {
                                         text = headerText,
