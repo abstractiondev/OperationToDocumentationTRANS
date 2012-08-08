@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -12,6 +13,8 @@ namespace OperationToDocumentationTRANS
 {
     public class Transformer
     {
+        private static string CurrentXmlFileName;
+
         T LoadXml<T>(string xmlFileName)
         {
             using (FileStream fStream = File.OpenRead(xmlFileName))
@@ -30,6 +33,7 @@ namespace OperationToDocumentationTRANS
             List<Tuple<string, string>> result = new List<Tuple<string, string>>();
             foreach(string xmlFileName in xmlFileNames)
             {
+                CurrentXmlFileName = xmlFileName;
                 OperationAbstractionType operationAbs = LoadXml<OperationAbstractionType>(xmlFileName);
                 DocumentationAbstractionType docAbs = TransformAbstraction(operationAbs);
                 string xmlContent = WriteToXmlString(docAbs);
@@ -70,12 +74,90 @@ namespace OperationToDocumentationTRANS
         {
             DocumentType document = new DocumentType
                                         {
-                                            title = "Operations",
-                                            name = "Operations",
-                                            Content = operationAbstraction.Operations.Operation.OrderBy(oper => oper.name).Select(
-                                                GetOperationContent).ToArray()
+                                            title = "Operations (" + Path.GetFileNameWithoutExtension(CurrentXmlFileName) + ")",
+                                            name =
+                                                "Operations (" + Path.GetFileNameWithoutExtension(CurrentXmlFileName) + ")",
                                         };
+
+            List<HeaderType> contents = new List<HeaderType>();
+            if (operationAbstraction.Drafts != null)
+            {
+                HeaderType drafts = new HeaderType()
+                                        {
+                                            level = 1,
+                                            text = "Draft Estimates"
+                                        };
+                List<HeaderType> draftContent = new List<HeaderType>();
+                draftContent.AddRange(GetDraftSummaries(operationAbstraction.Drafts));
+                foreach (var draft in draftContent)
+                    drafts.AddSubHeader(draft);
+                contents.Add(drafts);
+            }
+            if (operationAbstraction.Operations != null)
+            {
+                contents.AddRange(
+                    operationAbstraction.Operations.SelectMany(opers => opers.Operation).OrderBy(oper => oper.name).
+                        Select(
+                            GetOperationContent).ToArray());
+            }
+
+            document.Content = contents.ToArray();
             return document;
+        }
+
+        private static HeaderType[] GetDraftSummaries(DraftsType[] drafts)
+        {
+            //Debugger.Break();
+            var allDrafts = drafts.SelectMany(draftSet => draftSet.DraftOperation).ToArray();
+            var noParameterDrafts = allDrafts.Where(NoDraftParameters);
+            var draftsWithOneOrTwoParameters = allDrafts.Where(draft => NoDraftParameters(draft) == false &&
+                                                                        draft.DraftParameters.Length <= 2);
+            var draftsWithMoreThanTwoParameters = allDrafts.Where(draft => draft.DraftParameters != null &&
+                                                                           draft.DraftParameters.Length > 2);
+            var draftsWithForLoop =
+                allDrafts.Where(
+                    draft => draft.DraftExecution != null &&
+                             draft.DraftExecution.Count(exec => exec is ForLoopType) > 0);
+            var draftsWithIfCondition = allDrafts.Where(
+                    draft => draft.DraftExecution != null &&
+                             draft.DraftExecution.Count(exec => exec is IfConditionType) > 0);
+            var draftsWithReturnValueType = allDrafts.Where(draft => String.IsNullOrEmpty(draft.returnValueDataType) == false && draft.returnValueDataType.Trim() != "void");
+            var draftsWithOperationCall= allDrafts.Where(
+                    draft => draft.DraftExecution != null &&
+                             draft.DraftExecution.Count(exec => exec is DraftMethodCallType) > 0);
+            List<HeaderType> draftHeaders = new List<HeaderType>();
+            draftHeaders.Add(GetHeaderedDrafts(allDrafts, "All Operations"));
+            draftHeaders.Add(GetHeaderedDrafts(draftsWithOperationCall, "Containing Call To Other Method"));
+            draftHeaders.Add(GetHeaderedDrafts(noParameterDrafts, "No Input Parameters"));
+            draftHeaders.Add(GetHeaderedDrafts(draftsWithOneOrTwoParameters, "One or Two Input Parameters"));
+            draftHeaders.Add(GetHeaderedDrafts(draftsWithMoreThanTwoParameters, "More Than Two Input Parameters"));
+            draftHeaders.Add(GetHeaderedDrafts(draftsWithIfCondition, "With At Least One If Condition"));
+            draftHeaders.Add(GetHeaderedDrafts(draftsWithForLoop, "With At Least One For Loop"));
+            draftHeaders.Add(GetHeaderedDrafts(draftsWithReturnValueType, "With Some Return Value"));
+            return draftHeaders.ToArray();
+        }
+
+        private static bool NoDraftParameters(DraftOperationType draft)
+        {
+            return draft.DraftParameters == null ||
+                   (draft.DraftParameters.Length == 1 && draft.DraftParameters[0].name == "");
+        }
+
+        private static HeaderType GetHeaderedDrafts(IEnumerable<DraftOperationType> draftset, string headerName)
+        {
+            HeaderType header = new HeaderType()
+                                    {
+                                        text = headerName + " (Amount of methods: " + draftset.Count() + ", Lines of code: " + draftset.Sum(draft => draft.workEstimateInDays) + ")",
+                                        level = 2,
+                                    };
+            foreach (var draft in draftset.OrderBy(dr => dr.name))
+            {
+                header.AddSubHeader(new HeaderType()
+                                        {
+                                            text = draft.name + " (Lines of code " + draft.workEstimateInDays + ")"
+                                        });
+            }
+            return header;
         }
 
         private static HeaderType GetOperationContent(OperationType operation)
@@ -92,7 +174,7 @@ namespace OperationToDocumentationTRANS
                                     };
             List<HeaderType> subHeaders = new List<HeaderType>();
             subHeaders.Add(GetOperationSpecifications(operation.OperationSpec));
-            if (operation.Parameters != null)
+            if (operation.Parameters != null && operation.Parameters.Parameter[0].name != "")
             {
                 subHeaders.Add(GetVariablesHeaderedTable("Parameters", "Parameter", operation.Parameters.Parameter));
                 subHeaders.AddRange(operation.Parameters.Items.Select(GetValidationModificationContent));
@@ -102,7 +184,12 @@ namespace OperationToDocumentationTRANS
             subHeaders.AddRange(
                 operation.Execution.SequentialExecution.Select(GetExecutionContent));
             if(operation.OperationReturnValues != null)
-                subHeaders.Add(GetReturnValuesContent(operation.name, operation.OperationReturnValues));
+            {
+                bool isBogus = operation.OperationReturnValues.ReturnValue[0].dataType.Trim() == "void" ||
+                               String.IsNullOrWhiteSpace(operation.OperationReturnValues.ReturnValue[0].dataType);
+                if(!isBogus)
+                    subHeaders.Add(GetReturnValuesContent(operation.name, operation.OperationReturnValues));
+            }
             subHeaders.ForEach(subHeader => header.AddSubHeader(subHeader));
             return header;
         }
@@ -253,6 +340,8 @@ namespace OperationToDocumentationTRANS
         private static HeaderType GetExecutionContent(object execItem)
         {
             dynamic dynObj = execItem;
+            if (dynObj.name == "###")
+                return null;
             TargetType[] parameters = dynObj.Parameter ?? new TargetType[0];
             TargetType[] targets = dynObj.Target ?? new TargetType[0];
             string targetExt = getParameterExtensionString(targets.Union(parameters).Select(target => target.name));
@@ -296,6 +385,8 @@ namespace OperationToDocumentationTRANS
 
         private static HeaderType GetModificationContent(ModificationType modification)
         {
+            if (modification.name == "####")
+                return null;
             string targetExt = "";
             if (modification.Target != null)
                 targetExt = getParameterExtensionString(modification.Target.Select(target => target.name));
@@ -307,6 +398,8 @@ namespace OperationToDocumentationTRANS
 
         private static HeaderType GetValidationContent(ValidationType validation)
         {
+            if (validation.name == "####")
+                return null;
             string targetExt = "";
             if (validation.Target != null)
                 targetExt = getParameterExtensionString(validation.Target.Select(target => target.name));
