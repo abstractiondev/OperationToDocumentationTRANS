@@ -177,7 +177,8 @@ namespace OperationToDocumentationTRANS
             if (operation.Parameters != null && operation.Parameters.Parameter[0].name != "")
             {
                 subHeaders.Add(GetVariablesHeaderedTable("Parameters", "Parameter", operation.Parameters.Parameter));
-                subHeaders.AddRange(operation.Parameters.Items.Select(GetValidationModificationContent));
+                if(operation.Parameters.Items != null)
+                    subHeaders.AddRange(operation.Parameters.Items.Select(GetValidationModificationContent));
             }
             //subHeaders.AddRange(
             //    operation.Parameters.Parameter.Select(GetParameterContent));
@@ -346,7 +347,14 @@ namespace OperationToDocumentationTRANS
             TargetType[] targets = dynObj.Target ?? new TargetType[0];
             string targetExt = getParameterExtensionString(targets.Union(parameters).Select(target => target.name));
 
-            string headerText = "Execution: " + dynObj.name + targetExt;
+            string headerTypeString = "Execution: ";
+            if (execItem.GetType() == typeof(TargetDefinitionType))
+                headerTypeString = "Target Definition: ";
+            else if (execItem.GetType() == typeof(MethodExecuteType))
+                headerTypeString = "Method Call: ";
+            else if (execItem.GetType() == typeof (OperationExecuteType))
+                headerTypeString = "Operation Call: ";
+            string headerText = headerTypeString + dynObj.name + targetExt;
             HeaderType execHeader = new HeaderType
                                         {
                                             text = headerText,
