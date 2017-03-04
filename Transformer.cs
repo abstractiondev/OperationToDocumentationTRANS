@@ -182,8 +182,9 @@ namespace OperationToDocumentationTRANS
             }
             //subHeaders.AddRange(
             //    operation.Parameters.Parameter.Select(GetParameterContent));
-            subHeaders.AddRange(
-                operation.Execution.SequentialExecution.Select(GetExecutionContent));
+            if(operation.Execution?.SequentialExecution != null)
+                subHeaders.AddRange(
+                    operation.Execution.SequentialExecution.Select(GetExecutionContent));
             if(operation.OperationReturnValues != null)
             {
                 bool isBogus = operation.OperationReturnValues.ReturnValue[0].dataType.Trim() == "void" ||
